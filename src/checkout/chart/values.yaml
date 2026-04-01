@@ -84,9 +84,7 @@ redis:
 securityGroups:
   create: false
   securityGroupIds: []
-opentelemetry:
-  enabled: false
-  instrumentation: ''
+
 # values.yaml
 podDisruptionBudget:
   enabled: false
