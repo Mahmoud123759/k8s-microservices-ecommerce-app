@@ -7,7 +7,7 @@ serviceAccount:
   create: true
   # The name of the service account to use.
   # If not set and create is true, a name is generated using the fullname template
-  name: "retail-store-ui-sa"  # Using a different name to avoid conflicts
+  name: "retail-ui-sa"  # Using a different name to avoid conflicts
 
 service:
   type: ClusterIP
