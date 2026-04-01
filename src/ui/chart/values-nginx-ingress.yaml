@@ -15,7 +15,7 @@ service:
 
 ## Ingress for NGINX Ingress Controller
 ingress:
-  enabled: true
+  enabled: false
   className: "alb"
   annotations:
     alb.ingress.kubernetes.io/scheme: internet-facing
