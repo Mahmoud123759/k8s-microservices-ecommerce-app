@@ -20,6 +20,9 @@ serviceAccount:
   # If not set and create is true, a name is generated using the fullname template
   name: "catalog-sa"
 podAnnotations: {}
+# values.yaml
+podDisruptionBudget:
+  enabled: false
 podSecurityContext:
   fsGroup: 1000
 securityContext:
