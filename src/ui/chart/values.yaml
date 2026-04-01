@@ -83,64 +83,21 @@ app:
       # apiKey: ""
 ## Ingress for NGINX Ingress Controller
 ingress:
-  enabled: false
-  className: "nginx"
+  enabled: true
+  className: "alb"
   annotations:
-    nginx.ingress.kubernetes.io/ssl-redirect: "false"
-    nginx.ingress.kubernetes.io/force-ssl-redirect: "false"
-    cert-manager.io/cluster-issuer: "letsencrypt-prod"
-    nginx.ingress.kubernetes.io/proxy-body-size: "8m"
-    nginx.ingress.kubernetes.io/proxy-connect-timeout: "30"
-    nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
-    nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
-  tls: []
-  hosts: []
-ingresses:
-  # Direct ELB access - no host restriction
-  - name: direct
-    className: "nginx"
-    hosts: []
-    annotations:
-      # SSL redirect Change to false to true
-      nginx.ingress.kubernetes.io/ssl-redirect: "false"
-      nginx.ingress.kubernetes.io/force-ssl-redirect: "false"
-      nginx.ingress.kubernetes.io/proxy-body-size: "8m"
-      nginx.ingress.kubernetes.io/proxy-connect-timeout: "30"
-      nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
-      nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
-    tls: []
-  # Domain-based access with SSL
-  - name: domain
-    className: "nginx"
-    hosts:
-      - aluru.site
-    annotations:
-      nginx.ingress.kubernetes.io/ssl-redirect: "true"
-      nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
-      cert-manager.io/cluster-issuer: "letsencrypt-prod"
-      nginx.ingress.kubernetes.io/proxy-body-size: "8m"
-      nginx.ingress.kubernetes.io/proxy-connect-timeout: "30"
-      nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
-      nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
-    tls:
-      - secretName: tls-secret
-        hosts:
-          - aluru.site
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80}]'
+    alb.ingress.kubernetes.io/healthcheck-path: /
+    alb.ingress.kubernetes.io/success-codes: "200"
+  hosts:
+  - ""
+  tls: []   # ❌ بدون SSL
 
-# Cert Manager Configuration
+
+
+
+# Cert Manager Configuration (disabled)
 certManager:
-  createClusterIssuer: true
-  email: yaswanth.arumulla@gmail.com
-  clusterIssuerName: "letsencrypt-prod"
-  server: "https://acme-v02.api.letsencrypt.org/directory"
-  privateKeySecretName: "letsencrypt-prod-key"
-istio:
-  enabled: false
-  hosts: []
-opentelemetry:
-  enabled: false
-  instrumentation: ""
-podDisruptionBudget:
-  enabled: false
-  minAvailable: 2
-  maxUnavailable: 1
+  createClusterIssuer: false
