@@ -44,6 +44,8 @@ autoscaling:
   maxReplicas: 10
   targetCPUUtilizationPercentage: 80
   # targetMemoryUtilizationPercentage: 80
+podDisruptionBudget:
+  enabled: false
 nodeSelector: {}
 tolerations: []
 affinity: {}
