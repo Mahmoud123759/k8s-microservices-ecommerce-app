@@ -61,7 +61,7 @@ metrics:
 
 # Cert Manager Configuration
 certManager:
-  createClusterIssuer: true
+  createClusterIssuer: false
   email: iemafzalhassan@gmail.com
   clusterIssuerName: "letsencrypt-prod"
   server: "https://acme-v02.api.letsencrypt.org/directory"
