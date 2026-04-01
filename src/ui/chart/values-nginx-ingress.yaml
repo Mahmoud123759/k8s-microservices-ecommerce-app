@@ -13,27 +13,18 @@ service:
   type: ClusterIP
   port: 80
 
-# NGINX Ingress Configuration
 ingress:
   enabled: true
-  className: "nginx"
+  className: "alb"
   annotations:
-    nginx.ingress.kubernetes.io/ssl-redirect: "true"
-    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
-    nginx.ingress.kubernetes.io/proxy-body-size: "8m"
-    nginx.ingress.kubernetes.io/proxy-connect-timeout: "30"
-    nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
-    nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
-    # Basic proxy headers using individual annotations
-    nginx.ingress.kubernetes.io/proxy-set-header: "X-Real-IP $remote_addr"
-    # Cert-manager annotations
-    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80}]'
+    alb.ingress.kubernetes.io/healthcheck-path: /
+    alb.ingress.kubernetes.io/success-codes: "200"
   hosts:
     - retail-store.iemafzalhassan.in
-  tls:
-    - hosts:
-        - retail-store.iemafzalhassan.in
-      secretName: retail-store-tls
+  tls: []   # ❌ بدون SSL
 
 # Application configuration
 app:
@@ -59,10 +50,6 @@ metrics:
     prometheus.io/port: "8080"
     prometheus.io/path: "/actuator/prometheus"
 
-# Cert Manager Configuration
+# Cert Manager Configuration (disabled)
 certManager:
   createClusterIssuer: false
-  email: iemafzalhassan@gmail.com
-  clusterIssuerName: "letsencrypt-prod"
-  server: "https://acme-v02.api.letsencrypt.org/directory"
-  privateKeySecretName: "letsencrypt-prod-key" 
