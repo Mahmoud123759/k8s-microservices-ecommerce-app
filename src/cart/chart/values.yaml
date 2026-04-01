@@ -82,8 +82,5 @@ dynamodb:
   nodeSelector: {}
   tolerations: []
   affinity: {}
-opentelemetry:
-  enabled: false
-  instrumentation: ""
 podDisruptionBudget:
   enabled: false
