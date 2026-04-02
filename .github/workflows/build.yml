@@ -22,82 +22,23 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Set SERVICE_PATH
-        run: echo "SERVICE_PATH=${{ env.SRC_DIR }}/${{ matrix.service }}" >> $GITHUB_ENV
-
-  # =========================
-      # Cache (Speed Optimization)
-      # =========================
-      - name: Cache Maven
-        uses: actions/cache@v4
+      - name: SonarQube Scan
+        uses: SonarSource/sonarqube-scan-action@v2
         with:
-          path: ~/.m2
-          key: maven-${{ runner.os }}-${{ hashFiles('**/pom.xml') }}
+          projectBaseDir: ${{ env.SRC_DIR }}/${{ matrix.service }}
+          args: >
+            -Dsonar.projectKey=${{ matrix.service }}
+            -Dsonar.host.url=${{ secrets.SONAR_HOST_URL }}
+            -Dsonar.login=${{ secrets.SONAR_TOKEN }}
 
-      - name: Cache Node
-        uses: actions/cache@v4
-        with:
-          path: ~/.npm
-          key: node-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
-
-      - name: Cache Go
-        uses: actions/cache@v4
-        with:
-          path: ~/go/pkg/mod
-          key: go-${{ runner.os }}-${{ hashFiles('**/go.sum') }}
-
-      # =========================
-      # Install Sonar Scanner
-      # =========================
-      - name: Install Sonar Scanner
-        run: |
-          npm install -g sonar-scanner
-
-      # =========================
-      # Detect Language + Scan
-      # =========================
-      - name: Run SonarQube Scan
-        run: |
-          cd $SERVICE_PATH
-
-          if [ -f "pom.xml" ]; then
-            echo "Java project detected"
-            mvn clean verify sonar:sonar \
-              -Dsonar.projectKey=${{ matrix.service }} \
-              -Dsonar.host.url=${{ secrets.SONAR_HOST_URL }} \
-              -Dsonar.login=${{ secrets.SONAR_TOKEN }}
-
-          elif [ -f "package.json" ]; then
-            echo "Node.js project detected"
-            npm install
-            sonar-scanner \
-              -Dsonar.projectKey=${{ matrix.service }} \
-              -Dsonar.host.url=${{ secrets.SONAR_HOST_URL }} \
-              -Dsonar.login=${{ secrets.SONAR_TOKEN }}
-
-          elif [ -f "go.mod" ]; then
-            echo "Go project detected"
-            go test ./...
-            sonar-scanner \
-              -Dsonar.projectKey=${{ matrix.service }} \
-              -Dsonar.host.url=${{ secrets.SONAR_HOST_URL }} \
-              -Dsonar.login=${{ secrets.SONAR_TOKEN }}
-
-          else
-            echo "No supported language found"
-            exit 1
-          fi
-
-      # =========================
-      # Quality Gate
-      # =========================
       - name: SonarQube Quality Gate
-        uses: sonarsource/sonarqube-quality-gate-action@v1
+        uses: SonarSource/sonarqube-quality-gate-action@v1
         with:
-         scanMetadataReportFile: ${{ env.SRC_DIR }}/${{ matrix.service }}/.scannerwork/report-task.txt
+          scanMetadataReportFile: ${{ env.SRC_DIR }}/${{ matrix.service }}/.scannerwork/report-task.txt
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
- # =========================
+
+      # =========================
       # Trivy FS Scan (Code Scan)
       # =========================
       - name: Trivy FS Scan
@@ -115,7 +56,7 @@ jobs:
       # =========================
       - name: Build Docker image
         run: |
-          docker build -t ${{ matrix.service }}-dev:latest $SERVICE_PATH
+          docker build -t ${{ matrix.service }}-dev:latest ${{ env.SRC_DIR }}/${{ matrix.service }}
 
       # =========================
       # Trivy Image Scan
@@ -129,7 +70,6 @@ jobs:
           severity: HIGH,CRITICAL
           exit-code: 1
           output: trivy-image-${{ matrix.service }}.txt
-
 
   manual-approval-prod:
     needs: build-dev
@@ -149,15 +89,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Set SERVICE_PATH
-        run: echo "SERVICE_PATH=${{ env.SRC_DIR }}/${{ matrix.service }}" >> $GITHUB_ENV
-
-      # AWS Login (using secrets)
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-access-key-id: ${{ secrets.ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to ECR
@@ -168,5 +104,5 @@ jobs:
       - name: Build and Push
         run: |
           IMAGE_URI=${ECR_URI}/${{ matrix.service }}:latest
-          docker build -t $IMAGE_URI $SERVICE_PATH
+          docker build -t $IMAGE_URI ${{ env.SRC_DIR }}/${{ matrix.service }}
           docker push $IMAGE_URI
