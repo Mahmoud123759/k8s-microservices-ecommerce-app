@@ -14,10 +14,6 @@ jobs:
 
   build-dev:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        service: [catalog, orders, ui, cart, checkout]
-
     steps:
 
       - name: Checkout code
@@ -51,95 +47,60 @@ jobs:
           go-version: '1.21'
 
       # =========================
-      # Build Java backend if exists
+      # Build services one by one
       # =========================
-      - name: Build Java project
+      - name: Build Services Sequentially
         run: |
-          if [ -f "${{ env.SRC_DIR }}/${{ matrix.service }}/pom.xml" ]; then
-            mvn -f ${{ env.SRC_DIR }}/${{ matrix.service }}/pom.xml clean install
-          else
-            echo "No pom.xml, skipping Java build."
-          fi
+          for service in catalog orders ui cart checkout; do
+            echo "===================="
+            echo "Building $service..."
+            echo "===================="
 
-      # =========================
-      # Install frontend dependencies if package.json exists
-      # =========================
-      - name: Install Frontend dependencies
-        run: |
-          if [ -f "${{ env.SRC_DIR }}/${{ matrix.service }}/package.json" ]; then
-            cd ${{ env.SRC_DIR }}/${{ matrix.service }}
-            npm install --no-package-lock
-          else
-            echo "No package.json, skipping frontend install."
-          fi
+            # Java
+            if [ -f "${{ env.SRC_DIR }}/$service/pom.xml" ]; then
+              mvn -f ${{ env.SRC_DIR }}/$service/pom.xml clean install
+            else
+              echo "No pom.xml for $service, skipping Java build."
+            fi
 
-      # =========================
-      # Build Go backend if main.go exists
-      # =========================
-      - name: Build Go backend
-        run: |
-          if [ -f "${{ env.SRC_DIR }}/${{ matrix.service }}/main.go" ]; then
-            cd ${{ env.SRC_DIR }}/${{ matrix.service }}
-            go build ./...
-          else
-            echo "No main.go, skipping Go build."
-          fi
+            # Node.js
+            if [ -f "${{ env.SRC_DIR }}/$service/package.json" ]; then
+              cd ${{ env.SRC_DIR }}/$service
+              npm install --no-package-lock
+              cd ../../
+            else
+              echo "No package.json for $service, skipping frontend install."
+            fi
 
-      # =========================
-      # SonarQube Scan
-      # =========================
-      - name: SonarQube Scan
-        uses: SonarSource/sonarqube-scan-action@v2
-        with:
-          projectBaseDir: ${{ env.SRC_DIR }}/${{ matrix.service }}
-          extraArgs: >
-            -Dsonar.projectKey=${{ matrix.service }}
-            -Dsonar.java.binaries=${{ env.SRC_DIR }}/${{ matrix.service }}/target/classes
-            -Dsonar.go.coverage.reportPaths=${{ env.SRC_DIR }}/${{ matrix.service }}/coverage.out
-            -Dsonar.exclusions=**/node_modules/**,**/target/**
-        env:
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }} 
+            # Go
+            if [ -f "${{ env.SRC_DIR }}/$service/main.go" ]; then
+              cd ${{ env.SRC_DIR }}/$service
+              go build ./...
+              cd ../../
+            else
+              echo "No main.go for $service, skipping Go build."
+            fi
 
-      - name: SonarQube Quality Gate
-        uses: SonarSource/sonarqube-quality-gate-action@v1
-        with:
-          scanMetadataReportFile: ${{ env.SRC_DIR }}/${{ matrix.service }}/.scannerwork/report-task.txt
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+            # SonarQube
+            sonar-scanner \
+              -Dsonar.projectKey=$service \
+              -Dsonar.projectBaseDir=${{ env.SRC_DIR }}/$service \
+              -Dsonar.java.binaries=${{ env.SRC_DIR }}/$service/target/classes \
+              -Dsonar.go.coverage.reportPaths=${{ env.SRC_DIR }}/$service/coverage.out \
+              -Dsonar.exclusions=**/node_modules/**,**/target/** \
+              -Dsonar.host.url=${{ secrets.SONAR_HOST_URL }} \
+              -Dsonar.login=${{ secrets.SONAR_TOKEN }}
 
-      # =========================
-      # Trivy FS Scan (Code Scan)
-      # =========================
-      - name: Trivy FS Scan
-        uses: aquasecurity/trivy-action@v0.20.0 
-        with:
-          scan-type: fs
-          scan-ref: ${{ env.SRC_DIR }}/${{ matrix.service }}
-          format: table
-          severity: HIGH,CRITICAL
-          exit-code: 1
-          output: trivy-fs-${{ matrix.service }}.txt
+            # Trivy FS Scan
+            trivy fs --exit-code 1 --severity HIGH,CRITICAL --format table ${{ env.SRC_DIR }}/$service > trivy-fs-$service.txt
 
-      # =========================
-      # Build Docker image
-      # =========================
-      - name: Build Docker image
-        run: |
-          docker build -t ${{ matrix.service }}-dev:latest ${{ env.SRC_DIR }}/${{ matrix.service }}
+            # Build Docker image
+            docker build -t $service-dev:latest ${{ env.SRC_DIR }}/$service
 
-      # =========================
-      # Trivy Image Scan
-      # =========================
-      - name: Trivy Image Scan
-        uses: aquasecurity/trivy-action@v0.20.0
-        with:
-          scan-type: image
-          image-ref: ${{ matrix.service }}-dev:latest
-          format: table
-          severity: HIGH,CRITICAL
-          exit-code: 1
-          output: trivy-image-${{ matrix.service }}.txt
+            # Trivy Image Scan
+            trivy image --exit-code 1 --severity HIGH,CRITICAL --format table $service-dev:latest > trivy-image-$service.txt
+
+          done
 
   manual-approval-prod:
     needs: build-dev
@@ -151,10 +112,6 @@ jobs:
   build-and-push-prod:
     needs: manual-approval-prod
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        service: [catalog, orders, ui, cart, checkout]
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -171,8 +128,10 @@ jobs:
           aws ecr get-login-password --region $AWS_REGION | \
           docker login --username AWS --password-stdin $ECR_URI
 
-      - name: Build and Push
+      - name: Build and Push images sequentially
         run: |
-          IMAGE_URI=${ECR_URI}/${{ matrix.service }}:latest
-          docker build -t $IMAGE_URI ${{ env.SRC_DIR }}/${{ matrix.service }}
-          docker push $IMAGE_URI
+          for service in catalog orders ui cart checkout; do
+            IMAGE_URI=${ECR_URI}/$service:latest
+            docker build -t $IMAGE_URI ${{ env.SRC_DIR }}/$service
+            docker push $IMAGE_URI
+          done
