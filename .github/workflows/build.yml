@@ -1,0 +1,172 @@
+name: Build, Test & Publish Microservices to ECR
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  SRC_DIR: src
+  AWS_REGION: us-east-1
+  ECR_URI: 983470701667.dkr.ecr.us-east-1.amazonaws.com/my-app
+
+jobs:
+
+  build-dev:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [catalog, orders, ui, cart, checkout]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set SERVICE_PATH
+        run: echo "SERVICE_PATH=${{ env.SRC_DIR }}/${{ matrix.service }}" >> $GITHUB_ENV
+
+  # =========================
+      # Cache (Speed Optimization)
+      # =========================
+      - name: Cache Maven
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2
+          key: maven-${{ runner.os }}-${{ hashFiles('**/pom.xml') }}
+
+      - name: Cache Node
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: node-${{ runner.os }}-${{ hashFiles('**/package-lock.json') }}
+
+      - name: Cache Go
+        uses: actions/cache@v4
+        with:
+          path: ~/go/pkg/mod
+          key: go-${{ runner.os }}-${{ hashFiles('**/go.sum') }}
+
+      # =========================
+      # Install Sonar Scanner
+      # =========================
+      - name: Install Sonar Scanner
+        run: |
+          npm install -g sonar-scanner
+
+      # =========================
+      # Detect Language + Scan
+      # =========================
+      - name: Run SonarQube Scan
+        run: |
+          cd $SERVICE_PATH
+
+          if [ -f "pom.xml" ]; then
+            echo "Java project detected"
+            mvn clean verify sonar:sonar \
+              -Dsonar.projectKey=${{ matrix.service }} \
+              -Dsonar.host.url=${{ secrets.SONAR_HOST_URL }} \
+              -Dsonar.login=${{ secrets.SONAR_TOKEN }}
+
+          elif [ -f "package.json" ]; then
+            echo "Node.js project detected"
+            npm install
+            sonar-scanner \
+              -Dsonar.projectKey=${{ matrix.service }} \
+              -Dsonar.host.url=${{ secrets.SONAR_HOST_URL }} \
+              -Dsonar.login=${{ secrets.SONAR_TOKEN }}
+
+          elif [ -f "go.mod" ]; then
+            echo "Go project detected"
+            go test ./...
+            sonar-scanner \
+              -Dsonar.projectKey=${{ matrix.service }} \
+              -Dsonar.host.url=${{ secrets.SONAR_HOST_URL }} \
+              -Dsonar.login=${{ secrets.SONAR_TOKEN }}
+
+          else
+            echo "No supported language found"
+            exit 1
+          fi
+
+      # =========================
+      # Quality Gate
+      # =========================
+      - name: SonarQube Quality Gate
+        uses: sonarsource/sonarqube-quality-gate-action@v1
+        with:
+         scanMetadataReportFile: ${{ env.SRC_DIR }}/${{ matrix.service }}/.scannerwork/report-task.txt
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+ # =========================
+      # Trivy FS Scan (Code Scan)
+      # =========================
+      - name: Trivy FS Scan
+        uses: aquasecurity/trivy-action@v0.20.0
+        with:
+          scan-type: fs
+          scan-ref: ${{ env.SRC_DIR }}/${{ matrix.service }}
+          format: table
+          severity: HIGH,CRITICAL
+          exit-code: 1
+          output: trivy-fs-${{ matrix.service }}.txt
+
+      # =========================
+      # Build Docker image
+      # =========================
+      - name: Build Docker image
+        run: |
+          docker build -t ${{ matrix.service }}-dev:latest $SERVICE_PATH
+
+      # =========================
+      # Trivy Image Scan
+      # =========================
+      - name: Trivy Image Scan
+        uses: aquasecurity/trivy-action@v0.20.0
+        with:
+          scan-type: image
+          image-ref: ${{ matrix.service }}-dev:latest
+          format: table
+          severity: HIGH,CRITICAL
+          exit-code: 1
+          output: trivy-image-${{ matrix.service }}.txt
+
+
+  manual-approval-prod:
+    needs: build-dev
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - run: echo "Waiting for approval..."
+
+  build-and-push-prod:
+    needs: manual-approval-prod
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [catalog, orders, ui, cart, checkout]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set SERVICE_PATH
+        run: echo "SERVICE_PATH=${{ env.SRC_DIR }}/${{ matrix.service }}" >> $GITHUB_ENV
+
+      # AWS Login (using secrets)
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to ECR
+        run: |
+          aws ecr get-login-password --region $AWS_REGION | \
+          docker login --username AWS --password-stdin $ECR_URI
+
+      - name: Build and Push
+        run: |
+          IMAGE_URI=${ECR_URI}/${{ matrix.service }}:latest
+          docker build -t $IMAGE_URI $SERVICE_PATH
+          docker push $IMAGE_URI
