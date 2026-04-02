@@ -49,6 +49,7 @@ jobs:
       # Build Services Sequentially
       # =========================
       - name: Build Services Sequentially
+        shell: bash
         run: |
           for service in catalog orders ui cart checkout; do
             echo "===================="
@@ -64,21 +65,22 @@ jobs:
 
             # Node.js
             if [ -f "${{ env.SRC_DIR }}/$service/package.json" ]; then
-              cd ${{ env.SRC_DIR }}/$service
+              pushd ${{ env.SRC_DIR }}/$service
               npm install --no-package-lock --legacy-peer-deps
-              cd ../../
+              popd
             else
               echo "No package.json for $service, skipping frontend install."
             fi
 
             # Go
             if [ -f "${{ env.SRC_DIR }}/$service/main.go" ]; then
-              cd ${{ env.SRC_DIR }}/$service
+              pushd ${{ env.SRC_DIR }}/$service
               go build ./...
-              cd ../../
+              popd
             else
               echo "No main.go for $service, skipping Go build."
             fi
+          done
 
       # =========================
       # SonarQube Scan
