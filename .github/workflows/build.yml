@@ -43,7 +43,7 @@ jobs:
       # Trivy FS Scan (Code Scan)
       # =========================
       - name: Trivy FS Scan
-        uses: aquasecurity/trivy-action@v0.20.0
+        uses: aquasecurity/trivy-action@v0.20.0 
         with:
           scan-type: fs
           scan-ref: ${{ env.SRC_DIR }}/${{ matrix.service }}
