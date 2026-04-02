@@ -36,7 +36,6 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: '20'
-          
 
       # =========================
       # Setup Go
@@ -47,7 +46,7 @@ jobs:
           go-version: '1.21'
 
       # =========================
-      # Build services one by one
+      # Build Services Sequentially
       # =========================
       - name: Build Services Sequentially
         run: |
@@ -66,7 +65,7 @@ jobs:
             # Node.js
             if [ -f "${{ env.SRC_DIR }}/$service/package.json" ]; then
               cd ${{ env.SRC_DIR }}/$service
-              npm install --no-package-lock
+              npm install --no-package-lock --legacy-peer-deps
               cd ../../
             else
               echo "No package.json for $service, skipping frontend install."
@@ -81,25 +80,50 @@ jobs:
               echo "No main.go for $service, skipping Go build."
             fi
 
-            # SonarQube
-            sonar-scanner \
-              -Dsonar.projectKey=$service \
-              -Dsonar.projectBaseDir=${{ env.SRC_DIR }}/$service \
-              -Dsonar.java.binaries=${{ env.SRC_DIR }}/$service/target/classes \
-              -Dsonar.go.coverage.reportPaths=${{ env.SRC_DIR }}/$service/coverage.out \
-              -Dsonar.exclusions=**/node_modules/**,**/target/** \
-              -Dsonar.host.url=${{ secrets.SONAR_HOST_URL }} \
-              -Dsonar.login=${{ secrets.SONAR_TOKEN }}
+      # =========================
+      # SonarQube Scan
+      # =========================
+      - name: SonarQube Scan
+        uses: SonarSource/sonarqube-scan-action@v2
+        with:
+          projectBaseDir: ${{ env.SRC_DIR }}
+          extraArgs: >
+            -Dsonar.projectKey=my-microservices
+            -Dsonar.sources=${{ env.SRC_DIR }}
+            -Dsonar.exclusions=**/node_modules/**,**/target/**
+        env:
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
-            # Trivy FS Scan
-            trivy fs --exit-code 1 --severity HIGH,CRITICAL --format table ${{ env.SRC_DIR }}/$service > trivy-fs-$service.txt
+      # =========================
+      # Trivy FS Scan
+      # =========================
+      - name: Trivy FS Scan
+        uses: aquasecurity/trivy-action@v0.20.0
+        with:
+          scan-type: fs
+          scan-ref: ${{ env.SRC_DIR }}
+          format: table
+          severity: HIGH,CRITICAL
+          exit-code: 1
+          output: trivy-fs.txt
 
-            # Build Docker image
+      # =========================
+      # Build Docker images
+      # =========================
+      - name: Build Docker images sequentially
+        run: |
+          for service in catalog orders ui cart checkout; do
             docker build -t $service-dev:latest ${{ env.SRC_DIR }}/$service
+          done
 
-            # Trivy Image Scan
+      # =========================
+      # Trivy Image Scan
+      # =========================
+      - name: Trivy Image Scan
+        run: |
+          for service in catalog orders ui cart checkout; do
             trivy image --exit-code 1 --severity HIGH,CRITICAL --format table $service-dev:latest > trivy-image-$service.txt
-
           done
 
   manual-approval-prod:
@@ -125,10 +149,9 @@ jobs:
 
       - name: Login to ECR
         run: |
-          aws ecr get-login-password --region $AWS_REGION | \
-          docker login --username AWS --password-stdin $ECR_URI
+          aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_URI
 
-      - name: Build and Push images sequentially
+      - name: Build and Push Docker images sequentially
         run: |
           for service in catalog orders ui cart checkout; do
             IMAGE_URI=${ECR_URI}/$service:latest
