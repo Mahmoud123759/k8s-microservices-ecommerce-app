@@ -1,162 +1,256 @@
-name: Build, Test & Publish Microservices to ECR
+name: DevOps Pipeline
 
 on:
   push:
-    branches:
-      - main
-
-env:
-  SRC_DIR: src
-  AWS_REGION: us-east-1
-  ECR_URI: 983470701667.dkr.ecr.us-east-1.amazonaws.com/my-app
+    branches: [ "main" ]
 
 jobs:
-
-  build-dev:
+  build:
     runs-on: ubuntu-latest
-    steps:
+    
+    env:
+      # AWS
+      AWS_DEFAULT_REGION: us-east-1
+      AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
 
-      - name: Checkout code
+      # ui
+      UI_ECR_REPO_NAME: ${{ secrets.UI_ECR_REPO_NAME }}
+      UI_REPOSITORY_URI: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/${{ secrets.UI_ECR_REPO_NAME }}
+
+
+      # orders
+      ORDERS_ECR_REPO_NAME: ${{ secrets.ORDERS_ECR_REPO_NAME }}
+      ORDERS_REPOSITORY_URI: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/${{ secrets.ORDERS_ECR_REPO_NAME }}
+
+      # catalog
+      CATALOG_ECR_REPO_NAME: ${{ secrets.CATALOG_ECR_REPO_NAME }}
+      CATALOG_REPOSITORY_URI: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/${{ secrets.CATALOG_ECR_REPO_NAME }}
+
+      # checkout
+      CHECKOUT_ECR_REPO_NAME: ${{ secrets.CHECKOUT_ECR_REPO_NAME }}
+      CHECKOUT_REPOSITORY_URI: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/${{ secrets.CHECKOUT_ECR_REPO_NAME }}
+      
+      # cart
+      CART_ECR_REPO_NAME: ${{ secrets.CART_ECR_REPO_NAME }}
+      CART_REPOSITORY_URI: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.us-east-1.amazonaws.com/${{ secrets.CART_ECR_REPO_NAME }}
+
+    steps:
+      # 1️⃣ Check Docker
+      - name: Check Docker Version
+        run: docker --version
+
+      - name: Docker Info
+        run: docker info
+
+      # 2️⃣ Clean + Checkout
+      - name: Checkout Code
         uses: actions/checkout@v3
 
-      # =========================
-      # Setup Java
-      # =========================
-      - name: Setup Java
-        uses: actions/setup-java@v3
+      # 3️⃣ Setup Node.js
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
-          distribution: 'temurin'
-          java-version: '17'
-          cache: 'maven'
+          node-version: 18
 
-      # =========================
-      # Setup Node.js
-      # =========================
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '20'
-
-      # =========================
-      # Setup Go
-      # =========================
-      - name: Setup Go
-        uses: actions/setup-go@v4
-        with:
-          go-version: '1.21'
-
-      # =========================
-      # Build Services Sequentially
-      # =========================
-      - name: Build Services Sequentially
-        shell: bash
+      # 4️⃣ SonarQube Scan - cart
+      - name: SonarQube Scan cart
+        working-directory: src/cart
         run: |
-          for service in catalog orders ui cart checkout; do
-            echo "===================="
-            echo "Building $service..."
-            echo "===================="
+          mvn clean verify sonar:sonar \
+            -Dsonar.projectKey=cart \
+            -Dsonar.host.url=$SONAR_HOST_URL \
+            -Dsonar.login=$SONAR_TOKEN
 
-            # Java
-            if [ -f "${{ env.SRC_DIR }}/$service/pom.xml" ]; then
-              mvn -f ${{ env.SRC_DIR }}/$service/pom.xml clean install
-            else
-              echo "No pom.xml for $service, skipping Java build."
-            fi
+      # 5️⃣ SonarQube Scan - ui
+      - name: SonarQube Scan Backend
+        working-directory: src/ui
+        run: |
+          mvn clean verify sonar:sonar \
+            -Dsonar.projectKey=ui \
+            -Dsonar.host.url=$SONAR_HOST_URL \
+            -Dsonar.login=$SONAR_TOKEN
 
-            # Node.js
-            if [ -f "${{ env.SRC_DIR }}/$service/package.json" ]; then
-              pushd ${{ env.SRC_DIR }}/$service
-              npm install --no-package-lock --legacy-peer-deps
-              popd
-            else
-              echo "No package.json for $service, skipping frontend install."
-            fi
+      # 5️⃣ SonarQube Scan - orders
+      - name: SonarQube Scan orders
+        working-directory: src/orders
+        run: |
+          mvn clean verify sonar:sonar \
+            -Dsonar.projectKey=orders \
+            -Dsonar.host.url=$SONAR_HOST_URL \
+            -Dsonar.login=$SONAR_TOKEN
 
-            # Go
-            if [ -f "${{ env.SRC_DIR }}/$service/main.go" ]; then
-              pushd ${{ env.SRC_DIR }}/$service
-              go build ./...
-              popd
-            else
-              echo "No main.go for $service, skipping Go build."
-            fi
-          done
+      # 5️⃣ SonarQube Scan - catalog
+      - name: SonarQube Scan catalog
+        working-directory: src/catalog
+        run: |
+          sonar-scanner \
+            -Dsonar.projectKey=catalog \
+            -Dsonar.sources=. \
+            -Dsonar.host.url=$SONAR_HOST_URL \
+            -Dsonar.login=$SONAR_TOKEN
 
-      # =========================
-      # SonarQube Scan
-      # =========================
-      - name: SonarQube Scan
-        uses: SonarSource/sonarqube-scan-action@v2
+      # 5️⃣ SonarQube Scan - checkout
+      - name: SonarQube Scan checkout
+        working-directory: src/checkout
+        run: |
+          sonar-scanner \
+            -Dsonar.projectKey=checkout \
+            -Dsonar.sources=. \
+            -Dsonar.host.url=$SONAR_HOST_URL \
+            -Dsonar.login=$SONAR_TOKEN
+
+
+      # 6️⃣ Quality Gate - ui
+      - name: SonarQube Quality Gate ui
+        uses: sonarsource/sonarqube-quality-gate-action@v1
         with:
-          projectBaseDir: ${{ env.SRC_DIR }}
-          extraArgs: >
-            -Dsonar.projectKey=my-microservices
-            -Dsonar.sources=${{ env.SRC_DIR }}
-            -Dsonar.exclusions=**/node_modules/**,**/target/**
+          scanMetadataReportFile: src/ui/.scannerwork/report-task.txt
         env:
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      # 6️⃣ Quality Gate - catalog
+      - name: SonarQube Quality Gate catalog
+        uses: sonarsource/sonarqube-quality-gate-action@v1
+        with:
+          scanMetadataReportFile: src/catalog/.scannerwork/report-task.txt
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      # 6️⃣ Quality Gate - orders
+      - name: SonarQube Quality Gate orders
+        uses: sonarsource/sonarqube-quality-gate-action@v1
+        with:
+          scanMetadataReportFile: src/orders/.scannerwork/report-task.txt
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      # 6️⃣ Quality Gate - checkout
+      - name: SonarQube Quality Gate checkout
+        uses: sonarsource/sonarqube-quality-gate-action@v1
+        with:
+          scanMetadataReportFile: src/checkout/.scannerwork/report-task.txt
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      # 6️⃣ Quality Gate - cart
+      - name: SonarQube Quality Gate cart
+        uses: sonarsource/sonarqube-quality-gate-action@v1
+        with:
+          scanMetadataReportFile: src/cart/.scannerwork/report-task.txt
+        env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
-      # =========================
-      # Trivy FS Scan
-      # =========================
-      - name: Trivy FS Scan
+      # 7️⃣ Trivy File Scan
+      - name: Trivy FS Scan ui
         uses: aquasecurity/trivy-action@v0.20.0
         with:
-          scan-type: fs
-          scan-ref: ${{ env.SRC_DIR }}
-          format: table
-          severity: HIGH,CRITICAL
-          exit-code: 1
-          output: trivy-fs.txt
-
-      # =========================
-      # Build Docker images
-      # =========================
-      - name: Build Docker images sequentially
-        run: |
-          for service in catalog orders ui cart checkout; do
-            docker build -t $service-dev:latest ${{ env.SRC_DIR }}/$service
-          done
-
-      # =========================
-      # Trivy Image Scan
-      # =========================
-      - name: Trivy Image Scan
-        run: |
-          for service in catalog orders ui cart checkout; do
-            trivy image --exit-code 1 --severity HIGH,CRITICAL --format table $service-dev:latest > trivy-image-$service.txt
-          done
-
-  manual-approval-prod:
-    needs: build-dev
-    runs-on: ubuntu-latest
-    environment: production
-    steps:
-      - run: echo "Waiting for approval..."
-
-  build-and-push-prod:
-    needs: manual-approval-prod
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v2
+          scan-type: 'fs'
+          scan-ref: 'src/ui'
+          output: 'trivy-frontend.txt'
+      # 7️⃣ Trivy File Scan
+      - name: Trivy FS Scan catalog
+        uses: aquasecurity/trivy-action@v0.20.0
         with:
-          aws-access-key-id: ${{ secrets.ACCESS_KEY }}
-          aws-secret-access-key: ${{ secrets.SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
+          scan-type: 'fs'
+          scan-ref: 'src/catalog'
+          output: 'trivy-backend.txt'
+      # 7️⃣ Trivy File Scan
+      - name: Trivy FS Scan orders
+        uses: aquasecurity/trivy-action@v0.20.0
+        with:
+          scan-type: 'fs'
+          scan-ref: 'src/orders'
+          output: 'trivy-backend.txt'
+      # 7️⃣ Trivy File Scan
+      - name: Trivy FS Scan cart
+        uses: aquasecurity/trivy-action@v0.20.0
+        with:
+          scan-type: 'fs'
+          scan-ref: 'src/cart'
+          output: 'trivy-backend.txt'
+      # 7️⃣ Trivy File Scan
+      - name: Trivy FS Scan Backend
+        uses: aquasecurity/trivy-action@v0.20.0
+        with:
+          scan-type: 'fs'
+          scan-ref: 'src/checkout'
+          output: 'trivy-backend.txt'
 
+      # 8️⃣ Configure AWS
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_DEFAULT_REGION }}
+
+      # 9️⃣ Login to ECR
       - name: Login to ECR
-        run: |
-          aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_URI
+        uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build and Push Docker images sequentially
+      # 🔟 Build + Push ui
+      - name: Build & Push ui Docker Image
+        working-directory: src/ui
         run: |
-          for service in catalog orders ui cart checkout; do
-            IMAGE_URI=${ECR_URI}/$service:latest
-            docker build -t $IMAGE_URI ${{ env.SRC_DIR }}/$service
-            docker push $IMAGE_URI
-          done
+          docker build -t $UI_ECR_REPO_NAME .
+          docker tag $UI_ECR_REPO_NAME $UI_REPOSITORY_URI:${{ github.run_number }}
+          docker push $UI_REPOSITORY_URI:${{ github.run_number }}
+
+      # 🔟 Build + Push cart
+      - name: Build & Push cart Docker Image
+        working-directory: src/cart
+        run: |
+          docker build -t $CART_ECR_REPO_NAME .
+          docker tag $CART_ECR_REPO_NAME $CART_REPOSITORY_URI:${{ github.run_number }}
+          docker push $CART_REPOSITORY_URI:${{ github.run_number }}
+
+      # 🔟 Build + Push catalog
+      - name: Build & Push catalog Docker Image
+        working-directory: src/catalog
+        run: |
+          docker build -t $CATALOG_ECR_REPO_NAME .
+          docker tag $CATALOG_ECR_REPO_NAME $CATALOG_REPOSITORY_URI:${{ github.run_number }}
+          docker push $CATALOG_REPOSITORY_URI:${{ github.run_number }}
+
+      # 🔟 Build + Push orders
+      - name: Build & Push orders Docker Image
+        working-directory: src/orders
+        run: |
+          docker build -t $orders_ECR_REPO_NAME .
+          docker tag $orders_ECR_REPO_NAME $orders_REPOSITORY_URI:${{ github.run_number }}
+          docker push $orders_REPOSITORY_URI:${{ github.run_number }}
+
+
+      # 1️⃣1️⃣ Build + Push Backend
+      - name: Build & Push checkout Docker Image
+        working-directory: src/checkout 
+        run: |
+          docker build -t $checkout_ECR_REPO_NAME .
+          docker tag $checkout_ECR_REPO_NAME $checkout_REPOSITORY_URI:${{ github.run_number }}
+          docker push $checkout_REPOSITORY_URI:${{ github.run_number }}
+
+      # 1️⃣2️⃣ Trivy Image Scan
+      - name: Trivy Image Scan ui
+        uses: aquasecurity/trivy-action@v0.20.0
+        with:
+          image-ref: ${{ env.UI_REPOSITORY_URI }}:${{ github.run_number }}
+          output: 'trivy-ui-image.txt'
+
+      - name: Trivy Image Scan cart
+        uses: aquasecurity/trivy-action@v0.20.0
+        with:
+          image-ref: ${{ env.CART_REPOSITORY_URI }}:${{ github.run_number }}
+          output: 'trivy-cart-image.txt'
+      - name: Trivy Image Scan catalog
+        uses: aquasecurity/trivy-action@v0.20.0
+        with:
+          image-ref: ${{ env.CATALOG_REPOSITORY_URI }}:${{ github.run_number }}
+          output: 'trivy-catalog-image.txt'
+
+      - name: Trivy Image Scan checkout
+        uses: aquasecurity/trivy-action@v0.20.0
+        with:
+          image-ref: ${{ env.CHECKOUT_REPOSITORY_URI }}:${{ github.run_number }}
+          output: 'trivy-checkout-image.txt'
+      - name: Trivy Image Scan orders
+        uses: aquasecurity/trivy-action@v0.20.0
+        with:
+          image-ref: ${{ env.ORDERS_REPOSITORY_URI }}:${{ github.run_number }}
+          output: 'trivy-orders-image.txt'
+
