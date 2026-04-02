@@ -19,18 +19,87 @@ jobs:
         service: [catalog, orders, ui, cart, checkout]
 
     steps:
+
       - name: Checkout code
         uses: actions/checkout@v3
 
+      # =========================
+      # Setup Java
+      # =========================
+      - name: Setup Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'maven'
+
+      # =========================
+      # Setup Node.js
+      # =========================
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      # =========================
+      # Setup Go
+      # =========================
+      - name: Setup Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+
+      # =========================
+      # Build Java backend if exists
+      # =========================
+      - name: Build Java project
+        run: |
+          if [ -f "${{ env.SRC_DIR }}/${{ matrix.service }}/pom.xml" ]; then
+            mvn -f ${{ env.SRC_DIR }}/${{ matrix.service }}/pom.xml clean install
+          else
+            echo "No pom.xml, skipping Java build."
+          fi
+
+      # =========================
+      # Install frontend dependencies if package.json exists
+      # =========================
+      - name: Install Frontend dependencies
+        run: |
+          if [ -f "${{ env.SRC_DIR }}/${{ matrix.service }}/package.json" ]; then
+            cd ${{ env.SRC_DIR }}/${{ matrix.service }}
+            npm install
+          else
+            echo "No package.json, skipping frontend install."
+          fi
+
+      # =========================
+      # Build Go backend if main.go exists
+      # =========================
+      - name: Build Go backend
+        run: |
+          if [ -f "${{ env.SRC_DIR }}/${{ matrix.service }}/main.go" ]; then
+            cd ${{ env.SRC_DIR }}/${{ matrix.service }}
+            go build ./...
+          else
+            echo "No main.go, skipping Go build."
+          fi
+
+      # =========================
+      # SonarQube Scan
+      # =========================
       - name: SonarQube Scan
         uses: SonarSource/sonarqube-scan-action@v2
         with:
           projectBaseDir: ${{ env.SRC_DIR }}/${{ matrix.service }}
-          args: >
+          extraArgs: >
             -Dsonar.projectKey=${{ matrix.service }}
+            -Dsonar.java.binaries=${{ env.SRC_DIR }}/${{ matrix.service }}/target/classes
+            -Dsonar.go.coverage.reportPaths=${{ env.SRC_DIR }}/${{ matrix.service }}/coverage.out
+            -Dsonar.exclusions=**/node_modules/**,**/target/**
         env:
-            SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-            SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }} 
 
       - name: SonarQube Quality Gate
         uses: SonarSource/sonarqube-quality-gate-action@v1
