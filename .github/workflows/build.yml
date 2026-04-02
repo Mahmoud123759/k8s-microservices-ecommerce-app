@@ -28,8 +28,9 @@ jobs:
           projectBaseDir: ${{ env.SRC_DIR }}/${{ matrix.service }}
           args: >
             -Dsonar.projectKey=${{ matrix.service }}
-            -Dsonar.host.url=${{ secrets.SONAR_HOST_URL }}
-            -Dsonar.login=${{ secrets.SONAR_TOKEN }}
+        env:
+            SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+            SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
       - name: SonarQube Quality Gate
         uses: SonarSource/sonarqube-quality-gate-action@v1
