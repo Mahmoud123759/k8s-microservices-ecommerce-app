@@ -71,7 +71,7 @@ app:
   # theme: default
   endpoints:
     catalog: http://retail-store-catalog:80
-    carts: http://retail-store-cart-carts:80
+    carts: http://retail-store-cart:80
     orders: http://retail-store-orders:80
     checkout: http://retail-store-checkout:80
   chat:
