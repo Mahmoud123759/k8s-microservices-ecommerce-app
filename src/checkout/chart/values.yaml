@@ -4,13 +4,12 @@
 
 replicaCount: 1
 image:
-  repository: public.ecr.aws/aws-containers/retail-store-sample-checkout
+  repository: 983470701667.dkr.ecr.us-east-1.amazonaws.com/checkout
   pullPolicy: Always
-  tag: "1.2.2"
-imagePullSecrets:
-  - name: regcred
+  tag: "14"
+imagePullSecrets: []
 nameOverride: ""
-fullnameOverride: ""
+fullnameOverride: "my-custom-checkout"
 opentelemetry:
   enabled: false
 serviceAccount:
@@ -60,16 +59,16 @@ metrics:
     prometheus.io/path: '/metrics'
 configMap:
   create: true
-  name:
+  name: checkout-config
 app:
   persistence:
-    provider: 'in-memory'
+    provider: 'redis'
     redis:
-      endpoint: ''
+      endpoint: 'my-custom-checkout-redis:6379'
   endpoints:
     orders: http://retail-store-orders:80
 redis:
-  create: false
+  create: true
   image:
     repository: public.ecr.aws/docker/library/redis
     pullPolicy: IfNotPresent

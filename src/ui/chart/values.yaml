@@ -4,13 +4,12 @@
 
 replicaCount: 1
 image:
-  repository: public.ecr.aws/aws-containers/retail-store-sample-ui
+  repository: 983470701667.dkr.ecr.us-east-1.amazonaws.com/ui
   pullPolicy: Always
-  tag: "1.2.2"
-imagePullSecrets:
-  - name: regcred
+  tag: "14"
+imagePullSecrets: []
 nameOverride: ""
-fullnameOverride: ""
+fullnameOverride: "ui-retail-store"
 opentelemetry:
   enabled: false
 serviceAccount:
@@ -67,7 +66,7 @@ metrics:
     prometheus.io/path: "/actuator/prometheus"
 configMap:
   create: true
-  name: # if blank this will be generated
+  name: ui-config
 app:
   # theme: default
   endpoints:
@@ -90,6 +89,7 @@ app:
       # apiKey: ""
 ## Ingress for NGINX Ingress Controller
 ingress:
+  name: ui-ingress
   enabled: true
   className: "alb"
   annotations:

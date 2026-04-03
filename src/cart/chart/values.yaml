@@ -4,13 +4,12 @@
 
 replicaCount: 1
 image:
-  repository: public.ecr.aws/aws-containers/retail-store-sample-cart
+  repository: 983470701667.dkr.ecr.us-east-1.amazonaws.com/cart
   pullPolicy: Always
-  tag: "1.2.2"
-imagePullSecrets:
-  - name: regcred
+  tag: "14"
+imagePullSecrets: []
 nameOverride: ""
-fullnameOverride: ""
+fullnameOverride: "retail-store-cart"
 opentelemetry:
   enabled: false
 serviceAccount:
@@ -62,15 +61,16 @@ metrics:
     prometheus.io/path: "/actuator/prometheus"
 configMap:
   create: true
-  name:
+  name: cart-config
 app:
   persistence:
-    provider: in-memory
+    provider: dynamodb
     dynamodb:
       tableName: Items
-      createTable: false
+      createTable: true
+      endpoint: "http://retail-store-cart-dynamodb:8000"
 dynamodb:
-  create: false
+  create: true
   image:
     repository: public.ecr.aws/aws-dynamodb-local/aws-dynamodb-local
     pullPolicy: IfNotPresent
