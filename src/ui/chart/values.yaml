@@ -89,7 +89,6 @@ app:
       # apiKey: ""
 ## Ingress for NGINX Ingress Controller
 ingress:
-  name: ui-ingress
   enabled: true
   className: "alb"
   annotations:
