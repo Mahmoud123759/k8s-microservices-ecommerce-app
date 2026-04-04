@@ -34,9 +34,10 @@ spec:
           - sh
           - -c
           - |
+            echo "Waiting for MySQL..."
             for i in $(seq 1 60); do
-              wget -qO- http://retail-store-catalog-mysql:3306 && exit 0
-              echo "Waiting for MySQL..."
+              nc -z retail-store-catalog-mysql 3306 && exit 0
+              echo "MySQL not ready..."
               sleep 2
             done
             echo "Timeout waiting for MySQL"

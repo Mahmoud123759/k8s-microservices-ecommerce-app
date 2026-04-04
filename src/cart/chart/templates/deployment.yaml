@@ -34,13 +34,15 @@ spec:
           - sh
           - -c
           - |
+            echo "Waiting for DynamoDB..."
             for i in $(seq 1 60); do
-              wget -qO- http://retail-store-cart-dynamodb:8000 && exit 0
-              echo "Waiting for DynamoDB..."
+              nc -z retail-store-cart-dynamodb 8000 && exit 0
+              echo "DynamoDB not ready..."
               sleep 2
             done
             echo "Timeout waiting for DynamoDB"
             exit 1
+
       {{- with .Values.topologySpreadConstraints }}
       topologySpreadConstraints:
         {{- toYaml . | nindent 8 }}

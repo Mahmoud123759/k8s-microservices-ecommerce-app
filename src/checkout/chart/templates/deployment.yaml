@@ -34,12 +34,13 @@ spec:
           - sh
           - -c
           - |
+            echo "Waiting for Redis..."
             for i in $(seq 1 60); do
-              wget -qO- http://retail-store-checkout-redis:6379 && exit 0
-              echo "Waiting for redis..."
+              nc -z retail-store-checkout-redis 6379 && exit 0
+              echo "Redis not ready..."
               sleep 2
             done
-            echo "Timeout waiting for redis"
+            echo "Timeout waiting for Redis"
             exit 1
       initContainers:
       - name: wait-for-orders
@@ -48,13 +49,13 @@ spec:
           - sh
           - -c
           - |
-            for i in $(seq 1 60); do
-              wget -qO- http://retail-store-orders:80 && exit 0
-              echo "Waiting for orders..."
+            echo "Waiting for orders service..."
+            until wget -qO- http://retail-store-orders:80/actuator/health/readiness; do
+              echo "Orders not ready..."
               sleep 2
             done
-            echo "Timeout waiting for orders"
-            exit 1
+            echo "Orders is ready!"
+
       {{- with .Values.topologySpreadConstraints }}
       topologySpreadConstraints:
         {{- toYaml . | nindent 8 }}

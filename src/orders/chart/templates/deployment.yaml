@@ -34,12 +34,13 @@ spec:
           - sh
           - -c
           - |
+            echo "Waiting for Postgres..."
             for i in $(seq 1 60); do
-              wget -qO- http://retail-store-orders-postgresql:5432 && exit 0
-              echo "Waiting for postgres..."
+              nc -z retail-store-orders-postgresql 5432 && exit 0
+              echo "Postgres not ready..."
               sleep 2
             done
-            echo "Timeout waiting for postgres"
+            echo "Timeout waiting for Postgres"
             exit 1
       initContainers:
       - name: wait-for-rabbitmq
@@ -48,12 +49,13 @@ spec:
           - sh
           - -c
           - |
+            echo "Waiting for RabbitMQ..."
             for i in $(seq 1 60); do
-              wget -qO- http://retail-store-orders-rabbitmq:5672 && exit 0
-              echo "Waiting for rabbitmq..."
+              nc -z retail-store-orders-rabbitmq 5672 && exit 0
+              echo "RabbitMQ not ready..."
               sleep 2
             done
-            echo "Timeout waiting for rabbitmq"
+            echo "Timeout waiting for RabbitMQ"
             exit 1
 
       {{- with .Values.topologySpreadConstraints }}
