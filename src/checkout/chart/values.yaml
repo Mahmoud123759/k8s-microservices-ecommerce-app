@@ -9,7 +9,7 @@ image:
   tag: "14"
 imagePullSecrets: []
 nameOverride: ""
-fullnameOverride: "my-custom-checkout"
+fullnameOverride: "retail-store-checkout"
 opentelemetry:
   enabled: false
 serviceAccount:
@@ -64,7 +64,7 @@ app:
   persistence:
     provider: 'redis'
     redis:
-      endpoint: 'my-custom-checkout-redis:6379'
+      endpoint: 'retail-store-checkout-redis:6379'
   endpoints:
     orders: http://retail-store-orders:80
 redis:

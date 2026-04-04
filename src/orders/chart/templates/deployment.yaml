@@ -27,6 +27,35 @@ spec:
       labels:
         {{- include "orders.selectorLabels" . | nindent 8 }}
     spec:
+      initContainers:
+      - name: wait-for-postgres
+        image: busybox:1.36
+        command:
+          - sh
+          - -c
+          - |
+            for i in $(seq 1 60); do
+              wget -qO- http://retail-store-orders-postgresql:5432 && exit 0
+              echo "Waiting for postgres..."
+              sleep 2
+            done
+            echo "Timeout waiting for postgres"
+            exit 1
+      initContainers:
+      - name: wait-for-rabbitmq
+        image: busybox:1.36
+        command:
+          - sh
+          - -c
+          - |
+            for i in $(seq 1 60); do
+              wget -qO- http://retail-store-orders-rabbitmq:5672 && exit 0
+              echo "Waiting for rabbitmq..."
+              sleep 2
+            done
+            echo "Timeout waiting for rabbitmq"
+            exit 1
+
       {{- with .Values.topologySpreadConstraints }}
       topologySpreadConstraints:
         {{- toYaml . | nindent 8 }}

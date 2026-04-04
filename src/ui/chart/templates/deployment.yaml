@@ -68,9 +68,13 @@ spec:
               protocol: TCP
           readinessProbe:
             httpGet:
-              path: /actuator/health/readiness
+              path: /actuator/health
               port: 8080
-            initialDelaySeconds: 10
+            initialDelaySeconds: 30  # وقت الانتظار قبل أول check
+            timeoutSeconds: 2         # وقت الانتظار لكل محاولة
+            periodSeconds: 10         # كل كم ثانية يتأكد
+            successThreshold: 1
+            failureThreshold: 3
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:

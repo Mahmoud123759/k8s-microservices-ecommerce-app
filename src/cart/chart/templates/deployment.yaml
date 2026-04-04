@@ -27,6 +27,20 @@ spec:
       labels:
         {{- include "carts.selectorLabels" . | nindent 8 }}
     spec:
+      initContainers:
+      - name: wait-for-dynamodb
+        image: busybox:1.36
+        command:
+          - sh
+          - -c
+          - |
+            for i in $(seq 1 60); do
+              wget -qO- http://retail-store-cart-dynamodb:8000 && exit 0
+              echo "Waiting for DynamoDB..."
+              sleep 2
+            done
+            echo "Timeout waiting for DynamoDB"
+            exit 1
       {{- with .Values.topologySpreadConstraints }}
       topologySpreadConstraints:
         {{- toYaml . | nindent 8 }}
@@ -59,6 +73,9 @@ spec:
               path: /actuator/health/readiness
               port: 8080
             initialDelaySeconds: 10
+            timeoutSeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
